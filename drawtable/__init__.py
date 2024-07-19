@@ -350,7 +350,6 @@ ellipsis_str = '…'
 def truncate_str(s, max_length):
     len_s = len(s)
     wc_s = wcswidth(s)
-    print('truncate_str', s, max_length, len_s, wc_s)
     if len_s == wc_s:
         if len_s > max_length:
             return s[:max_length - 1] + ellipsis_str
