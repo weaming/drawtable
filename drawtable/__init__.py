@@ -4,6 +4,7 @@ from __future__ import print_function
 import sys
 import collections
 import string
+from wcwidth import wcswidth
 from drawtable.styles import BaseStyle, BoxStyle, MarkdownStyle, RstGridStyle
 
 
@@ -20,19 +21,36 @@ auto_header_letters = string.ascii_uppercase
 auto_header_letters_num = len(auto_header_letters)
 
 
+def wc_ljust(text, length):
+    return text + (' ' * max(0, (length - wcswidth(text))))
+
+
+class Align:
+    left = 'left'
+    right = 'right'
+    center = 'center'
+
+
+class Style:
+    base = 'base'
+    box = 'box'
+    markdown = 'markdown'
+    rst_grid = 'rst-grid'
+
+
 # noinspection PyStringFormat
 class Table(object):
     align_marks = {
-        'left': '<',
-        'right': '>',
-        'center': '^',
+        Align.left: '<',
+        Align.right: '>',
+        Align.center: '^',
     }
 
     table_styles = {
-        'base': BaseStyle,
-        'box': BoxStyle,
-        'markdown': MarkdownStyle,
-        'rst-grid': RstGridStyle,
+        Style.base: BaseStyle,
+        Style.box: BoxStyle,
+        Style.markdown: MarkdownStyle,
+        Style.rst_grid: RstGridStyle,
     }
 
     # Reference of line number format in `less`:
@@ -42,8 +60,8 @@ class Table(object):
     # `CONTENT` is the actual value of the line
     row_number_width = 7
 
-    def __init__(self, margin_x=1, margin_y=0, align='left',
-                 max_col_width=16, table_style='box',
+    def __init__(self, margin_x=1, margin_y=0, align=Align.left,
+                 max_col_width=16, table_style=Style.box,
                  auto_header=False, row_numbers=False, wrap_row=True):
         self.margin_x = margin_x
         self.margin_x_str = ' ' * margin_x
@@ -85,7 +103,7 @@ class Table(object):
             for index, i in enumerate(row):
                 # if not isinstance(i, str):
                 #    raise TypeError('item in row must be str, get: {:r}'.format(i))
-                i_len = len(i)
+                i_len = wcswidth(i)
                 col_len = cols_width.setdefault(index, i_len)
                 if i_len > col_len:
                     cols_width[index] = i_len
@@ -137,8 +155,10 @@ class Table(object):
                 v = sp[sub_row_index]
             except IndexError:
                 v = ''
-            tmpl = '{:' + self.align_mark + str(cols_width[col_index]) + '}'
-            cell = self.margin_x_str + tmpl.format(v) + self.margin_x_str
+            else:
+                # truncate if too long
+                v = truncate_str(v, cols_width[col_index])
+            cell = self.margin_x_str + wc_ljust(v, cols_width[col_index]) + self.margin_x_str
             yield cell
 
     def cell_generator(self, values, cols_num, cols_width):
@@ -151,11 +171,13 @@ class Table(object):
             else:
                 # truncate if too long
                 i = truncate_str(i, col_width)
-            tmpl = '{:' + self.align_mark + str(col_width) + '}'
-            cell = self.margin_x_str + tmpl.format(i) + self.margin_x_str
+            cell = self.margin_x_str + wc_ljust(i, col_width) + self.margin_x_str
             yield cell
 
     def _split_text(self, text):
+        if self.max_col_width == -1:
+            return [text]
+
         sp = []
         for i in text.split('\n'):
             if text:
@@ -251,7 +273,10 @@ class Table(object):
         # 3. max_col_width
         for k, h in enumerate(header):
             h_len = len(h)
-            cols_width[k] = min([max([cols_width.get(k, 0), h_len]), self.max_col_width])
+            w = max([cols_width.get(k, 0), h_len])
+            if self.max_col_width != -1:
+                w = min([w, self.max_col_width])
+            cols_width[k] = w
         cols_num = len(cols_width)
 
         cells_width = [self.cell_width(cols_width[i]) for i in range(cols_num)]
@@ -320,6 +345,22 @@ ellipsis_str = '…'
 
 
 def truncate_str(s, max_length):
-    if len(s) > max_length:
-        return s[:max_length - 1] + ellipsis_str
+    len_s = len(s)
+    wc_s = wcswidth(s)
+    print('truncate_str', s, max_length, len_s, wc_s)
+    if len_s == wc_s:
+        if len_s > max_length:
+            return s[:max_length - 1] + ellipsis_str
+    else:
+        # wc truncate
+        if wc_s > max_length:
+            for i in range(len_s):
+                tr = s[:len_s - i - 1]
+                print('tr', tr)
+                if wcswidth(tr) <= max_length:
+                    return tr
     return s
+
+
+def wc_truncate(s, max_length):
+    len_s = len(s)
