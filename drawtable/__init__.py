@@ -2,7 +2,10 @@
 
 from __future__ import print_function
 import sys
-import collections
+try:
+    from collections.abc import Iterable
+except ImportError:
+    from collections import Iterable
 import string
 from wcwidth import wcswidth
 from drawtable.styles import BaseStyle, BoxStyle, MarkdownStyle, RstGridStyle
@@ -81,7 +84,7 @@ class Table(object):
 
     @staticmethod
     def preprocess_data(data, has_header=True):
-        if not isinstance(data, collections.Iterable):
+        if not isinstance(data, Iterable):
             raise TypeError('data must be iterable, get: {:r}'.format(data))
         cols_width = {}
         header = []
